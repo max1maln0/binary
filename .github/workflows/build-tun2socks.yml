@@ -7,30 +7,27 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout workspace
+      - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Clone tun2socks repo
-        run: |
-          set -eux
-          git clone --depth=1 https://github.com/xjasonlyu/tun2socks src
-          cd src
-          go mod init github.com/xjasonlyu/tun2socks || true
-          go mod tidy
-          ls -la
 
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.22.x'
-          cache: false   # <-- отключаем кеш вообще
+          cache: false
 
       - name: Setup Android NDK
         uses: nttld/setup-ndk@v1
         with:
           ndk-version: r26d
 
-      - name: Build tun2socks for Android ARM64
+      - name: Clone tun2socks sources
+        run: |
+          set -eux
+          git clone --depth=1 https://github.com/xjasonlyu/tun2socks src
+          ls -la src
+
+      - name: Build tun2socks for Android ARM64 (PIE)
         run: |
           set -euxo pipefail
           cd src
@@ -39,20 +36,26 @@ jobs:
           export GOARCH=arm64
           export CGO_ENABLED=1
           export CC="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android${API}-clang"
-          
-          echo "=== ENV ==="
-          env | sort
-          echo "=== GO ENV ==="
-          go env
-          echo "=== Compiler version ==="
-          $CC --version
-          
-          echo "=== Building ==="
-          go mod download
-          go build -v -trimpath -ldflags "-s -w" -buildmode=pie -o tun2socks-arm64-v8a ./cmd/tun2socks || (echo "BUILD FAILED" && exit 1)
 
-      - name: Upload binary artifact
-        if: success()
+          echo "=== ENV ==="
+          go version
+          go env
+          $CC --version
+
+          echo "=== Go modules ==="
+          go mod download
+          # (у проекта есть go.mod, mod tidy не обязателен; можно вызвать при желании)
+          # go mod tidy
+
+          echo "=== Build ==="
+          go build -v -trimpath -ldflags "-s -w" -buildmode=pie -o tun2socks-arm64-v8a ./cmd/tun2socks
+
+          echo "=== Check artifact ==="
+          ls -lh tun2socks-arm64-v8a
+          file tun2socks-arm64-v8a || true
+          readelf -h tun2socks-arm64-v8a | sed -n '1,30p' || true
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: tun2socks-arm64-v8a
