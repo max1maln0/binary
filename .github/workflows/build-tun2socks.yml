@@ -1,26 +1,31 @@
 name: build-android-tun2socks
 on:
   workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        arch: [arm64, arm, amd64]
+        arch: [arm64, arm, x86_64]
+
     steps:
       - uses: actions/checkout@v4
+
       - name: Fetch sources
-        run: |
-          git clone https://github.com/xjasonlyu/tun2socks src
+        run: git clone https://github.com/xjasonlyu/tun2socks src
+
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.22.x'
+
       - name: Setup Android NDK
         uses: nttld/setup-ndk@v1
         with:
           ndk-version: r26d
-      - name: Build ${{ matrix.arch }}
+
+      - name: Build for ${{ matrix.arch }}
         run: |
           cd src
           export API=21
@@ -39,9 +44,10 @@ jobs:
             export CC=$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android${API}-clang
             OUT=tun2socks-x86_64
           fi
-          go build -trimpath -ldflags "-s -w" -o $OUT ./cmd/tun2socks
-          ls -l $OUT
-      - name: Upload artifacts
+          go build -v -trimpath -ldflags "-s -w" -o $OUT ./cmd/tun2socks
+          ls -lh $OUT
+
+      - name: Upload binaries
         uses: actions/upload-artifact@v4
         with:
           name: tun2socks-android
