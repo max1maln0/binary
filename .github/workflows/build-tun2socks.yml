@@ -1,0 +1,48 @@
+name: build-android-tun2socks
+on:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [arm64, arm, amd64]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch sources
+        run: |
+          git clone https://github.com/xjasonlyu/tun2socks src
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26d
+      - name: Build ${{ matrix.arch }}
+        run: |
+          cd src
+          export API=21
+          export GOOS=android
+          export CGO_ENABLED=1
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            export GOARCH=arm64
+            export CC=$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android${API}-clang
+            OUT=tun2socks-arm64-v8a
+          elif [ "${{ matrix.arch }}" = "arm" ]; then
+            export GOARCH=arm
+            export CC=$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi${API}-clang
+            OUT=tun2socks-armeabi-v7a
+          else
+            export GOARCH=amd64
+            export CC=$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android${API}-clang
+            OUT=tun2socks-x86_64
+          fi
+          go build -trimpath -ldflags "-s -w" -o $OUT ./cmd/tun2socks
+          ls -l $OUT
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tun2socks-android
+          path: src/tun2socks-*
