@@ -3,12 +3,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-arm64:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        arch: [arm64, arm, x86_64]
-
     steps:
       - uses: actions/checkout@v4
 
@@ -25,30 +21,21 @@ jobs:
         with:
           ndk-version: r26d
 
-      - name: Build for ${{ matrix.arch }}
+      - name: Build arm64-v8a (PIE)
         run: |
           cd src
           export API=21
           export GOOS=android
+          export GOARCH=arm64
           export CGO_ENABLED=1
-          if [ "${{ matrix.arch }}" = "arm64" ]; then
-            export GOARCH=arm64
-            export CC=$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android${API}-clang
-            OUT=tun2socks-arm64-v8a
-          elif [ "${{ matrix.arch }}" = "arm" ]; then
-            export GOARCH=arm
-            export CC=$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi${API}-clang
-            OUT=tun2socks-armeabi-v7a
-          else
-            export GOARCH=amd64
-            export CC=$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android${API}-clang
-            OUT=tun2socks-x86_64
-          fi
-          go build -v -trimpath -ldflags "-s -w" -o $OUT ./cmd/tun2socks
-          ls -lh $OUT
+          export CC=$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android${API}-clang
+          go env
+          # Важно: Android требует PIE
+          go build -v -trimpath -ldflags "-s -w" -buildmode=pie -o tun2socks-arm64-v8a ./cmd/tun2socks
+          ls -lh tun2socks-arm64-v8a
 
-      - name: Upload binaries
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: tun2socks-android
-          path: src/tun2socks-*
+          path: src/tun2socks-arm64-v8a
