@@ -12,8 +12,10 @@ jobs:
 
       - name: Clone tun2socks repo
         run: |
+          set -eux
           git clone --depth=1 https://github.com/xjasonlyu/tun2socks src
           cd src
+          go mod init github.com/xjasonlyu/tun2socks || true
           go mod tidy
           ls -la
 
@@ -21,6 +23,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.22.x'
+          cache: false   # <-- отключаем кеш вообще
 
       - name: Setup Android NDK
         uses: nttld/setup-ndk@v1
@@ -37,18 +40,19 @@ jobs:
           export CGO_ENABLED=1
           export CC="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android${API}-clang"
           
-          echo "=== Building ==="
+          echo "=== ENV ==="
+          env | sort
+          echo "=== GO ENV ==="
           go env
+          echo "=== Compiler version ==="
           $CC --version
+          
+          echo "=== Building ==="
           go mod download
-          
-          go build -v -trimpath -ldflags "-s -w" -buildmode=pie -o tun2socks-arm64-v8a ./cmd/tun2socks
-          
-          echo "=== Done ==="
-          file tun2socks-arm64-v8a || true
-          ls -lh tun2socks-arm64-v8a
+          go build -v -trimpath -ldflags "-s -w" -buildmode=pie -o tun2socks-arm64-v8a ./cmd/tun2socks || (echo "BUILD FAILED" && exit 1)
 
       - name: Upload binary artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: tun2socks-arm64-v8a
