@@ -6,33 +6,48 @@ jobs:
   build-arm64:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout empty repo (just to have a workspace)
+        uses: actions/checkout@v4
 
-      - name: Fetch sources
-        run: git clone https://github.com/xjasonlyu/tun2socks src
+      - name: Fetch tun2socks sources
+        run: |
+          set -eux
+          git clone --depth=1 https://github.com/xjasonlyu/tun2socks src
+          ls -la src
+          cat src/go.mod
 
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.22.x'
 
-      - name: Setup Android NDK
+      - name: Setup Android NDK r26d
         uses: nttld/setup-ndk@v1
         with:
           ndk-version: r26d
 
-      - name: Build arm64-v8a (PIE)
+      - name: Build arm64-v8a (Android PIE)
         run: |
+          set -euxo pipefail
           cd src
           export API=21
           export GOOS=android
           export GOARCH=arm64
           export CGO_ENABLED=1
-          export CC=$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android${API}-clang
+          # компилятор NDK для arm64
+          export CC="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android${API}-clang"
+          # sanity-логи
+          echo "ANDROID_NDK=$ANDROID_NDK"
+          $CC --version
           go env
-          # Важно: Android требует PIE
+          go version
+          # зависимости Go модуля
+          go mod download
+          # сборка: обязательно PIE для Android
           go build -v -trimpath -ldflags "-s -w" -buildmode=pie -o tun2socks-arm64-v8a ./cmd/tun2socks
           ls -lh tun2socks-arm64-v8a
+          file tun2socks-arm64-v8a || true
+          readelf -h tun2socks-arm64-v8a | sed -n '1,30p' || true
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
