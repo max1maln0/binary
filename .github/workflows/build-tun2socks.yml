@@ -19,18 +19,24 @@ jobs:
       - name: Setup Android NDK
         uses: nttld/setup-ndk@v1
         with:
-          ndk-version: r26d
+          ndk-version: r27c   # можно r26d, но на раннерах сейчас чаще стоит r27
 
       - name: Clone tun2socks sources
         run: |
           set -eux
           git clone --depth=1 https://github.com/xjasonlyu/tun2socks src
-          ls -la src
+          cd src
+          ls -la
+          echo "---- top-level entries ----"
+          ls -1
+          echo "---- tree (first 2 levels) ----"
+          find . -maxdepth 2 -type d -print
 
-      - name: Build tun2socks for Android ARM64 (PIE)
+      - name: Build tun2socks for Android ARM64 (PIE) with autodetect
         run: |
           set -euxo pipefail
           cd src
+
           export API=21
           export GOOS=android
           export GOARCH=arm64
@@ -39,16 +45,31 @@ jobs:
 
           echo "=== ENV ==="
           go version
-          go env
+          go env | sed -n '1,40p'
           $CC --version
 
           echo "=== Go modules ==="
           go mod download
-          # (у проекта есть go.mod, mod tidy не обязателен; можно вызвать при желании)
-          # go mod tidy
+
+          # Авто-детект entry пакета main
+          PKG=""
+          if [ -d "cmd/tun2socks" ]; then
+            PKG="./cmd/tun2socks"
+          elif [ -f "main.go" ]; then
+            PKG="./"
+          else
+            # ищем первый каталог с package main
+            CANDIDATE=$(grep -Rsl --include="*.go" "^package main$" . | head -n1 || true)
+            if [ -n "$CANDIDATE" ]; then
+              PKG="./$(dirname "$CANDIDATE")"
+            else
+              echo "Не найден пакет main. Структура изменилась?"; exit 1
+            fi
+          fi
+          echo "Build target: $PKG"
 
           echo "=== Build ==="
-          go build -v -trimpath -ldflags "-s -w" -buildmode=pie -o tun2socks-arm64-v8a ./cmd/tun2socks
+          go build -v -trimpath -ldflags "-s -w" -buildmode=pie -o tun2socks-arm64-v8a "$PKG"
 
           echo "=== Check artifact ==="
           ls -lh tun2socks-arm64-v8a
